@@ -1,0 +1,48 @@
+name: release helm chart
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  CHART_PATH: charts/resize-operator
+  CHART_NAME: resize-operator
+
+jobs:
+  ghcr:
+    name: package and push to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.4
+
+      - name: helm registry login
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Package chart
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          helm package "${{ env.CHART_PATH }}" --version "$VERSION" --app-version "$VERSION"
+
+      - name: Push chart to GHCR (OCI)
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          helm push "${{ env.CHART_NAME }}-${VERSION}.tgz" "oci://ghcr.io/${{ github.repository_owner }}/charts"

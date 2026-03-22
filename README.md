@@ -1,10 +1,8 @@
-# resize-operator
-
-Early **alpha** Kubernetes operator to validate **in-place Pod resize** (`pods/resize`).
+# resize-operator (alpha)
 
 ## Requirements
 
-- **metrics-server** (Pod usage via `metrics.k8s.io`)
+- **metrics-server** (pod usage via `metrics.k8s.io`)
 - Kubernetes cluster with **in-place Pod resize support** (`pods/resize` subresource). The operator checks capability and degrades gracefully if unsupported.
 
 ## Why
@@ -14,7 +12,7 @@ In environments resource requests are often set “with big headroom” or copie
 - **requests >> real usage** → scheduler thinks the cluster is more full than it is → fewer Pods can be scheduled
 - real workload needs change dynamically, but requests stay static
 
-`resize-operator` periodically adjusts CPU/memory **requests** closer to observed usage (via metrics-server) and applies changes **without restarts** using `pods/resize`.
+`resize-operator` periodically adjusts CPU/memory **requests** closer to observed usage and applies changes **without restarts** using `pods/resize`.
 
 ## How it works
 
@@ -27,12 +25,30 @@ On each reconcile loop the operator:
 - writes annotations and emits `Resized` events
 
 ```mermaid
-flowchart LR
-  MS[metrics-server\nmetrics.k8s.io] -->|PodMetrics| OP[resize-operator]
-  OP -->|dry-run + apply| PR[pods/resize\nsubresource]
-  PR --> APIS[kube-apiserver]
-  APIS --> KUBELET[kubelet / node accounting]
-  KUBELET --> SCHED[scheduler\nplacement decisions]
+%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80}}}%%
+flowchart TB
+
+  subgraph CONTROL_PLANE["Kubernetes Control Plane"]
+    APIS[kube-apiserver]
+    SCHED[scheduler]
+  end
+
+  subgraph OPERATOR["Resize Operator"]
+    OP[resize-operator]
+  end
+
+  subgraph NODE["Node"]
+    KUBELET[kubelet]
+  end
+
+  subgraph METRICS["Metrics"]
+    MS[metrics-server]
+  end
+
+  MS -->|PodMetrics| OP
+  OP -->|pods/resize| APIS
+  APIS --> KUBELET
+  KUBELET -->|resource update| SCHED
 ```
 
 ## Resize logic
