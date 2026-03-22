@@ -923,10 +923,7 @@ func isEligiblePod(pod *corev1.Pod) bool {
 	default:
 		return false
 	}
-	if pod.Spec.NodeName == "" {
-		return false
-	}
-	return true
+	return pod.Spec.NodeName != ""
 }
 
 func shouldSkipByCooldown(pod *corev1.Pod, cooldown time.Duration, now time.Time) bool {

@@ -150,11 +150,12 @@ func main() {
 
 	// kubebuilder create api
 	if err := (&controller.InPlacePodResizeReconciler{
-		Client:         mgr.GetClient(),
-		APIReader:      mgr.GetAPIReader(),
-		Scheme:         mgr.GetScheme(),
-		Metrics:        metrics.New(metricsCS),
-		Resizer:        resize.NewProber(kubeClientset.Discovery(), kubeClientset),
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
+		Scheme:    mgr.GetScheme(),
+		Metrics:   metrics.New(metricsCS),
+		Resizer:   resize.NewProber(kubeClientset.Discovery(), kubeClientset),
+		//lint:ignore SA1019
 		Recorder:       mgr.GetEventRecorderFor("resize-operator"),
 		TimeLocation:   loc,
 		MetricsTimeout: metricsTimeout,

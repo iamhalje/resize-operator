@@ -65,7 +65,6 @@ The operator computes new `requests` based on the current resource usage from `m
 
 ## Observability
 
-- Prometheus metrics are exposed on `/metrics`
 - Grafana dashboard: [docs/grafana/resize-operator-dashboard.json](docs/grafana/resize-operator-dashboard.json)
 
 ## More docs
