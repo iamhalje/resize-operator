@@ -1,0 +1,22 @@
+{{- if .Values.metrics.service.create }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "resize-operator.fullname" . }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "resize-operator.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "{{ .Values.metrics.service.port }}"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "resize-operator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: metrics
+      port: {{ .Values.metrics.service.port }}
+      protocol: TCP
+      targetPort: metrics
+{{- end }}
