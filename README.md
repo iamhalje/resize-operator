@@ -5,15 +5,6 @@
 - **metrics-server** (pod usage via `metrics.k8s.io`)
 - Kubernetes cluster with **in-place Pod resize support** (`pods/resize` subresource). The operator checks capability and degrades gracefully if unsupported.
 
-## Why
-
-In environments resource requests are often set “with big headroom” or copied from templates:
-
-- **requests >> real usage** → scheduler thinks the cluster is more full than it is → fewer Pods can be scheduled
-- real workload needs change dynamically, but requests stay static
-
-`resize-operator` periodically adjusts CPU/memory **requests** closer to observed usage and applies changes **without restarts** using `pods/resize`.
-
 ## How it works
 
 On each reconcile loop the operator:
