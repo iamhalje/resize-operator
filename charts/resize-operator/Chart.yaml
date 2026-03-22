@@ -1,0 +1,10 @@
+---
+apiVersion: v2
+name: resize-operator
+description: In-place Pod resize operator
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/iamhalje/resize-operator
+maintainers:
+  - name: Dmitry Ponomaryov

@@ -1,0 +1,108 @@
+replicaCount: 1
+
+image:
+  repository: resize-operator
+  tag: ""
+  pullPolicy: IfNotPresent
+
+args:
+  leaderElect: true
+  bindAddress: ":8081"
+  metricsBindAddress: ":8080"
+  timeZone: ""
+  kubeApiQps: 0
+  kubeApiBurst: 0
+  metricsTimeout: ""
+  resizeTimeout: ""
+  patchTimeout: ""
+  extra:
+    - --zap-log-level=info
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+serviceAccount:
+  create: true
+  name: ""
+
+rbac:
+  create: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector:
+  node-role.kubernetes.io/control-plane: ''
+tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - podAffinityTerm:
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: resize-operator
+        topologyKey: kubernetes.io/hostname
+      weight: 1
+
+metrics:
+  service:
+    create: true
+    port: 8080
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    additionalLabels: {}
+
+policy:
+  create: false
+  name: EXAMPLE
+  spec:
+    algorithm:
+      allowDownscale: false
+      headroomPercent: 20
+    bounds:
+      cpuMin: 50m
+      cpuMax: 4
+      memoryMin: 128Mi
+      memoryMax: 4Gi
+      minChangeCPU: 50m
+      minChangeMemory: 64Mi
+    enabled: false
+    namespaceSelector:
+      exclude: []
+      include: []
+    podSelector:
+      matchLabels:
+        resize.maxim.technology/enabled: "true"
+    resources:
+      limitsMode: Unchanged
+      requests:
+        cpu: true
+        memory: true
+    thresholds:
+      downPercent: 0
+      upPercent: 0
+    timing:
+      capabilityCheckInterval: 24h
+      cooldown: 2m
+      interval: 1m
+      maxPodsPerRun: 50
+      maxConcurrentPods: 10
+      stabilizationWindow: 30s

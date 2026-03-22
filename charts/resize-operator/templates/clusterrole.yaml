@@ -1,0 +1,33 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "resize-operator.fullname" . }}-manager-role
+  labels:
+    {{- include "resize-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create","patch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get","list","watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get","list","watch","patch"]
+  - apiGroups: [""]
+    resources: ["pods/resize"]
+    verbs: ["update"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get","list","watch"]
+  - apiGroups: ["resize.maxim.technology"]
+    resources: ["inplacepodresizes"]
+    verbs: ["get","list","watch","create","update","patch","delete"]
+  - apiGroups: ["resize.maxim.technology"]
+    resources: ["inplacepodresizes/status"]
+    verbs: ["get","update","patch"]
+  - apiGroups: ["resize.maxim.technology"]
+    resources: ["inplacepodresizes/finalizers"]
+    verbs: ["update"]
+{{- end -}}
