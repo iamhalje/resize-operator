@@ -5,6 +5,13 @@
 - **metrics-server** (pod usage via `metrics.k8s.io`)
 - Kubernetes cluster with **in-place Pod resize support** (`pods/resize` subresource). The operator checks capability and degrades gracefully if unsupported.
 
+## Fast install
+
+```bash
+kubectl create namespace resize-operator-system
+helm install resize-operator oci://ghcr.io/iamhalje/charts/resize-operator
+```
+
 ## How it works
 
 On each reconcile loop the operator:
