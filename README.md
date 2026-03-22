@@ -8,8 +8,7 @@
 ## Fast install
 
 ```bash
-kubectl create namespace resize-operator-system
-helm install resize-operator oci://ghcr.io/iamhalje/charts/resize-operator
+helm install resize-operator oci://ghcr.io/iamhalje/charts/resize-operator -n resize-operator-system --create-namespace
 ```
 
 ## How it works
