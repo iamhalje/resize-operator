@@ -28,27 +28,31 @@ On each reconcile loop the operator:
 %%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80}}}%%
 flowchart TB
 
-  subgraph CONTROL_PLANE["Kubernetes Control Plane"]
-    APIS[kube-apiserver]
-    SCHED[scheduler]
+  subgraph METRICS["Metrics API"]
+    MS[metrics-server]
   end
 
   subgraph OPERATOR["Resize Operator"]
-    OP[resize-operator]
+    SEL[Select candidate Pods]
+    CALC[Compute desired requests]
+    REC[Write annotations<br/>and emit Resized events]
+  end
+
+  subgraph CONTROL_PLANE["Kubernetes Control Plane"]
+    APIS[kube-apiserver]
+    SCHED[scheduler]
   end
 
   subgraph NODE["Node"]
     KUBELET[kubelet]
   end
 
-  subgraph METRICS["Metrics"]
-    MS[metrics-server]
-  end
-
-  MS -->|PodMetrics| OP
-  OP -->|pods/resize| APIS
+  SEL -->|fetch PodMetrics| MS
+  MS -->|PodMetrics| CALC
+  CALC -->|pods/resize<br/>dry-run + apply| APIS
   APIS --> KUBELET
   KUBELET -->|resource update| SCHED
+  APIS --> REC
 ```
 
 ## Resize logic
