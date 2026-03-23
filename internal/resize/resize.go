@@ -175,17 +175,28 @@ func isUnsupportedResizeErr(err error) bool {
 	if err == nil {
 		return false
 	}
-	if apierrors.IsNotFound(err) || apierrors.IsMethodNotSupported(err) {
+	if apierrors.IsMethodNotSupported(err) {
 		return true
 	}
 	var se *apierrors.StatusError
 	if errors.As(err, &se) {
 		code := se.ErrStatus.Code
+		// A missing Pod is a transient race (pod was deleted/recreated) and must
+		// not flip global capability to Unsupported.
+		if code == 404 && se.ErrStatus.Details != nil &&
+			se.ErrStatus.Details.Kind == "pods" &&
+			se.ErrStatus.Details.Name != "" &&
+			se.ErrStatus.Details.Group == "" {
+			return false
+		}
 		if code == 404 || code == 405 {
 			return true
 		}
 	}
 	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "pods \"") && strings.Contains(msg, "\" not found") {
+		return false
+	}
 	return strings.Contains(msg, "pods/resize") && (strings.Contains(msg, "not found") || strings.Contains(msg, "method not allowed"))
 }
 
