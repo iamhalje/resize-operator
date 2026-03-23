@@ -17,6 +17,7 @@ limitations under the License.
 package observability
 
 import (
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -46,6 +47,8 @@ type RunStats struct {
 }
 
 var (
+	capabilityStates = []string{"supported", "unsupported", "unknown"}
+
 	reconcileTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "resize_operator_reconcile_total",
@@ -187,6 +190,20 @@ var (
 		},
 		[]string{"policy", "namespace", "direction"},
 	)
+	capabilityState = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "resize_operator_capability_state",
+			Help: "Current in-place resize capability state per policy.",
+		},
+		[]string{"policy", "state"},
+	)
+	capabilityRuntimeProbeFailuresTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "resize_operator_capability_runtime_probe_failures_total",
+			Help: "Total runtime capability probe failures that forced capability downgrade.",
+		},
+		[]string{"policy", "phase"},
+	)
 )
 
 func init() {
@@ -211,6 +228,8 @@ func init() {
 		deltaMemoryRequestBytesTotal,
 		deltaCPURequestMilliByNamespaceTotal,
 		deltaMemoryRequestBytesByNamespaceTotal,
+		capabilityState,
+		capabilityRuntimeProbeFailuresTotal,
 	)
 }
 
@@ -254,6 +273,13 @@ func InitPolicyMetrics(policy string) {
 		deltaCPURequestMilliTotal.WithLabelValues(policy, dir)
 		deltaMemoryRequestBytesTotal.WithLabelValues(policy, dir)
 	}
+
+	for _, state := range capabilityStates {
+		capabilityState.WithLabelValues(policy, state)
+	}
+	capabilityState.WithLabelValues(policy, "unknown").Set(1)
+	capabilityRuntimeProbeFailuresTotal.WithLabelValues(policy, "dryrun")
+	capabilityRuntimeProbeFailuresTotal.WithLabelValues(policy, "apply")
 }
 
 func ObserveRun(policy string, started time.Time, s RunStats) {
@@ -417,4 +443,35 @@ func AddBoundedNamespace(policy, namespace, resource, bound string, n int) {
 		bound = "unknown"
 	}
 	requestsBoundedByNamespaceTotal.WithLabelValues(policy, namespace, resource, bound).Add(float64(n))
+}
+
+func ObserveCapability(policy, state string) {
+	if policy == "" {
+		policy = "unknown"
+	}
+	s := strings.ToLower(strings.TrimSpace(state))
+	switch s {
+	case "supported", "unsupported", "unknown":
+	default:
+		s = "unknown"
+	}
+	for _, candidate := range capabilityStates {
+		v := 0.0
+		if candidate == s {
+			v = 1
+		}
+		capabilityState.WithLabelValues(policy, candidate).Set(v)
+	}
+}
+
+func IncCapabilityRuntimeProbeFailure(policy, phase string) {
+	if policy == "" {
+		policy = "unknown"
+	}
+	switch phase {
+	case "dryrun", "apply":
+	default:
+		phase = "unknown"
+	}
+	capabilityRuntimeProbeFailuresTotal.WithLabelValues(policy, phase).Inc()
 }
