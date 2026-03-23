@@ -138,6 +138,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	var cap resize.Capability
 	if r.Resizer != nil {
 		cap = r.Resizer.Supported(ctx, capTTL, now())
+		observability.ObserveCapability(ipr.Name, string(cap.State))
 		ipr.Status.LastCapabilityCheckTime = &metav1.Time{Time: cap.Checked}
 		switch cap.State {
 		case resize.SupportSupported:
@@ -654,6 +655,8 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 						if r.Resizer != nil {
 							r.Resizer.Mark(c)
 						}
+						observability.ObserveCapability(ipr.Name, string(c.State))
+						observability.IncCapabilityRuntimeProbeFailure(ipr.Name, "dryrun")
 						ipr.Status.LastCapabilityCheckTime = &metav1.Time{Time: c.Checked}
 						setCond(metav1.Condition{
 							Type:               conditionInPlaceResizeSupport,
@@ -715,6 +718,8 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 						if r.Resizer != nil {
 							r.Resizer.Mark(c)
 						}
+						observability.ObserveCapability(ipr.Name, string(c.State))
+						observability.IncCapabilityRuntimeProbeFailure(ipr.Name, "dryrun")
 						ipr.Status.LastCapabilityCheckTime = &metav1.Time{Time: c.Checked}
 						setCond(metav1.Condition{
 							Type:               conditionInPlaceResizeSupport,
