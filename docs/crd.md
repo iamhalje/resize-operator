@@ -1,7 +1,7 @@
 # API Reference
 
 ## Packages
-- [resize.halje.ru/v1alpha1](#resizemaximtechnologyv1alpha1)
+- [resize.halje.ru/v1alpha1](#resizehaljeruv1alpha1)
 
 
 ## resize.halje.ru/v1alpha1
