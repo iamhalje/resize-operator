@@ -1,5 +1,5 @@
 {{- if .Values.policy.create -}}
-apiVersion: resize.maxim.technology/v1alpha1
+apiVersion: resize.halje.ru/v1alpha1
 kind: InPlacePodResize
 metadata:
   name: {{ .Values.policy.name }}

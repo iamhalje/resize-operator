@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.1
-  name: inplacepodresizes.resize.maxim.technology
+  name: inplacepodresizes.resize.halje.ru
 spec:
-  group: resize.maxim.technology
+  group: resize.halje.ru
   names:
     kind: InPlacePodResize
     listKind: InPlacePodResizeList

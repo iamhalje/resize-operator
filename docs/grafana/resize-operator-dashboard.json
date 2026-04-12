@@ -88,7 +88,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "max(resize_operator_last_run_metrics_ok{policy=~\"$policy\",dc=~\"$dc\"}[10m])",
+          "expr": "max(resize_operator_last_run_metrics_ok{policy=~\"$policy\"}[10m])",
           "instant": true,
           "legendFormat": "",
           "range": false,
@@ -150,7 +150,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_reconcile_total{policy=~\"$policy\",dc=~\"$dc\"}[5m]))",
+          "expr": "sum(rate(resize_operator_reconcile_total{policy=~\"$policy\"}[5m]))",
           "instant": false,
           "legendFormat": "",
           "range": true,
@@ -213,7 +213,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "(time() - max(resize_operator_last_run_timestamp_seconds{policy=~\"$policy\",dc=~\"$dc\"})) / 60",
+          "expr": "(time() - max(resize_operator_last_run_timestamp_seconds{policy=~\"$policy\"})) / 60",
           "instant": true,
           "legendFormat": "",
           "range": false,
@@ -414,7 +414,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_pods_resized_total{policy=~\"$policy\",dc=~\"$dc\"}[5m])) by (policy)",
+          "expr": "sum(rate(resize_operator_pods_resized_total{policy=~\"$policy\"}[5m])) by (policy)",
           "legendFormat": "{{policy}}",
           "range": true,
           "refId": "A"
@@ -508,7 +508,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_pods_failed_total{policy=~\"$policy\",dc=~\"$dc\"}[5m])) by (policy, phase)",
+          "expr": "sum(rate(resize_operator_pods_failed_total{policy=~\"$policy\"}[5m])) by (policy, phase)",
           "legendFormat": "{{policy}} {{phase}}",
           "refId": "A"
         }
@@ -601,7 +601,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_requests_bounded_namespace_total{policy=~\"$policy\",dc=~\"$dc\",namespace=~\"$namespace\"}[5m])) by (namespace, bound)",
+          "expr": "sum(rate(resize_operator_requests_bounded_namespace_total{policy=~\"$policy\",namespace=~\"$namespace\"}[5m])) by (namespace, bound)",
           "legendFormat": "{{namespace}} - {{ bound }}",
           "range": true,
           "refId": "A"
@@ -695,7 +695,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_pods_skipped_total{policy=~\"$policy\",dc=~\"$dc\"}[5m])) by (reason)",
+          "expr": "sum(rate(resize_operator_pods_skipped_total{policy=~\"$policy\"}[5m])) by (reason)",
           "legendFormat": "{{reason}}",
           "refId": "A"
         }
@@ -829,14 +829,14 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_delta_cpu_request_millicores_total{policy=~\"$policy\",dc=~\"$dc\",direction=\"up\"})[2m]) by (policy)",
+          "expr": "sum(rate(resize_operator_delta_cpu_request_millicores_total{policy=~\"$policy\",direction=\"up\"})[2m]) by (policy)",
           "legendFormat": "{{policy}} up",
           "range": true,
           "refId": "B"
         },
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_delta_cpu_request_millicores_total{policy=~\"$policy\",dc=~\"$dc\",direction=\"down\"})[2m]) by (policy)",
+          "expr": "sum(rate(resize_operator_delta_cpu_request_millicores_total{policy=~\"$policy\",direction=\"down\"})[2m]) by (policy)",
           "legendFormat": "{{policy}} down",
           "range": true,
           "refId": "C"
@@ -971,14 +971,14 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_delta_memory_request_bytes_total{policy=~\"$policy\",dc=~\"$dc\",direction=\"up\"})[2m]) by (policy) / 1024 / 1024",
+          "expr": "sum(rate(resize_operator_delta_memory_request_bytes_total{policy=~\"$policy\",direction=\"up\"})[2m]) by (policy) / 1024 / 1024",
           "legendFormat": "{{policy}} up",
           "range": true,
           "refId": "B"
         },
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_delta_memory_request_bytes_total{policy=~\"$policy\",dc=~\"$dc\",direction=\"down\"})[2m]) by (policy) / 1024 / 1024",
+          "expr": "sum(rate(resize_operator_delta_memory_request_bytes_total{policy=~\"$policy\",direction=\"down\"})[2m]) by (policy) / 1024 / 1024",
           "legendFormat": "{{policy}} down",
           "range": true,
           "refId": "C"
@@ -1113,7 +1113,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_delta_cpu_request_millicores_namespace_total{policy=~\"$policy\",dc=~\"$dc\",namespace=~\"$namespace\"})[2m]) by (namespace, direction)",
+          "expr": "sum(rate(resize_operator_delta_cpu_request_millicores_namespace_total{policy=~\"$policy\",namespace=~\"$namespace\"})[2m]) by (namespace, direction)",
           "legendFormat": "{{namespace}} {{direction}}",
           "range": true,
           "refId": "A"
@@ -1248,7 +1248,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_delta_memory_request_bytes_namespace_total{policy=~\"$policy\",dc=~\"$dc\",namespace=~\"$namespace\"})[2m]) by (namespace, direction) / 1024 / 1024",
+          "expr": "sum(rate(resize_operator_delta_memory_request_bytes_namespace_total{policy=~\"$policy\",namespace=~\"$namespace\"})[2m]) by (namespace, direction) / 1024 / 1024",
           "legendFormat": "{{namespace}} {{direction}}",
           "range": true,
           "refId": "A"
@@ -1347,7 +1347,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_api_calls_total{policy=~\"$policy\",dc=~\"$dc\"}[5m])) by (call)",
+          "expr": "sum(rate(resize_operator_api_calls_total{policy=~\"$policy\"}[5m])) by (call)",
           "legendFormat": "{{call}}",
           "refId": "A"
         }
@@ -1441,7 +1441,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "resize_operator_last_run_delta_memory_request_bytes_namespace{policy=~\"$policy\",dc=~\"$dc\",namespace=~\"$namespace\"} / 1024 / 1024",
+          "expr": "resize_operator_last_run_delta_memory_request_bytes_namespace{policy=~\"$policy\",namespace=~\"$namespace\"} / 1024 / 1024",
           "legendFormat": "{{namespace}} last-run",
           "range": true,
           "refId": "A"
@@ -1536,7 +1536,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "resize_operator_last_run_delta_cpu_request_millicores_namespace{policy=~\"$policy\",dc=~\"$dc\",namespace=~\"$namespace\"}",
+          "expr": "resize_operator_last_run_delta_cpu_request_millicores_namespace{policy=~\"$policy\",namespace=~\"$namespace\"}",
           "legendFormat": "{{namespace}} last-run",
           "refId": "A"
         }
@@ -1629,7 +1629,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_requests_clamped_total{policy=~\"$policy\",dc=~\"$dc\"}[5m])) by (resource)",
+          "expr": "sum(rate(resize_operator_requests_clamped_total{policy=~\"$policy\"}[5m])) by (resource)",
           "legendFormat": "{{resource}}",
           "range": true,
           "refId": "A"
@@ -1702,7 +1702,7 @@
         "name": "namespace",
         "options": [],
         "query": {
-          "query": "label_values(resize_operator_pods_resized_namespace_total{policy=~\"$policy\",dc=~\"$dc\"}, namespace)",
+          "query": "label_values(resize_operator_pods_resized_namespace_total{policy=~\"$policy\"}, namespace)",
           "refId": "Prometheus-namespace"
         },
         "refresh": 1,

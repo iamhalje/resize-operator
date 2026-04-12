@@ -90,7 +90,7 @@ policy:
       include: []
     podSelector:
       matchLabels:
-        resize.maxim.technology/enabled: "true"
+        resize.halje.ru/enabled: "true"
     resources:
       limitsMode: Unchanged
       requests:
