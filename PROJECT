@@ -3,7 +3,7 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.13.0
-domain: maxim.technology
+domain: halje.ru
 layout:
 - go.kubebuilder.io/v4
 projectName: workspace
@@ -13,7 +13,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: maxim.technology
+  domain: halje.ru
   group: resize
   kind: InPlacePodResize
   path: github.com/iamhalje/resize-operator/api/v1alpha1

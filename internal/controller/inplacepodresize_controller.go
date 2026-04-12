@@ -43,9 +43,9 @@ import (
 	"github.com/iamhalje/resize-operator/internal/resize"
 )
 
-// +kubebuilder:rbac:groups=resize.maxim.technology,resources=inplacepodresizes,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=resize.maxim.technology,resources=inplacepodresizes/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=resize.maxim.technology,resources=inplacepodresizes/finalizers,verbs=update
+// +kubebuilder:rbac:groups=resize.halje.ru,resources=inplacepodresizes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=resize.halje.ru,resources=inplacepodresizes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=resize.halje.ru,resources=inplacepodresizes/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups="",resources=pods/resize,verbs=update
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch

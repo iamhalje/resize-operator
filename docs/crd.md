@@ -1,10 +1,10 @@
 # API Reference
 
 ## Packages
-- [resize.maxim.technology/v1alpha1](#resizemaximtechnologyv1alpha1)
+- [resize.halje.ru/v1alpha1](#resizehaljeruv1alpha1)
 
 
-## resize.maxim.technology/v1alpha1
+## resize.halje.ru/v1alpha1
 
 Package v1alpha1 contains API Schema definitions for the resize v1alpha1 API group.
 
@@ -65,7 +65,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `resize.maxim.technology/v1alpha1` | | |
+| `apiVersion` _string_ | `resize.halje.ru/v1alpha1` | | |
 | `kind` _string_ | `InPlacePodResize` | | |
 | `kind` _string_ | Kind is a string value representing the REST resource this object represents.<br />Servers may infer this from the endpoint the client submits requests to.<br />Cannot be updated.<br />In CamelCase.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |  | Optional: \{\} <br /> |
 | `apiVersion` _string_ | APIVersion defines the versioned schema of this representation of an object.<br />Servers should convert recognized schemas to the latest internal value, and<br />may reject unrecognized values.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |  | Optional: \{\} <br /> |
@@ -86,7 +86,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `resize.maxim.technology/v1alpha1` | | |
+| `apiVersion` _string_ | `resize.halje.ru/v1alpha1` | | |
 | `kind` _string_ | `InPlacePodResizeList` | | |
 | `kind` _string_ | Kind is a string value representing the REST resource this object represents.<br />Servers may infer this from the endpoint the client submits requests to.<br />Cannot be updated.<br />In CamelCase.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |  | Optional: \{\} <br /> |
 | `apiVersion` _string_ | APIVersion defines the versioned schema of this representation of an object.<br />Servers should convert recognized schemas to the latest internal value, and<br />may reject unrecognized values.<br />More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |  | Optional: \{\} <br /> |

@@ -28,10 +28,10 @@ import (
 )
 
 const (
-	annotationLastResizeTime  = "resize.maxim.technology/last-resize-time"
-	annotationLastAppliedHash = "resize.maxim.technology/last-applied-hash"
-	annotationPendingHash     = "resize.maxim.technology/pending-hash"
-	annotationPendingSince    = "resize.maxim.technology/pending-since"
+	annotationLastResizeTime  = "resize.halje.ru/last-resize-time"
+	annotationLastAppliedHash = "resize.halje.ru/last-applied-hash"
+	annotationPendingHash     = "resize.halje.ru/pending-hash"
+	annotationPendingSince    = "resize.halje.ru/pending-since"
 )
 
 const (
