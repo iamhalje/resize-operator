@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": null,
   "links": [],
   "panels": [
     {
@@ -1663,28 +1662,10 @@
         },
         "includeAll": true,
         "multi": true,
-        "name": "dc",
-        "options": [],
-        "query": {
-          "query": "label_values(resize_operator_reconcile_total, dc)",
-          "refId": "Prometheus-dc"
-        },
-        "refresh": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "text": "All",
-          "value": [
-            "$__all"
-          ]
-        },
-        "includeAll": true,
-        "multi": true,
         "name": "policy",
         "options": [],
         "query": {
-          "query": "label_values(resize_operator_reconcile_total{dc=~\"$dc\"}, policy)",
+          "query": "label_values(resize_operator_reconcile_total{}, policy)",
           "refId": "Prometheus-policy"
         },
         "refresh": 1,
@@ -1717,6 +1698,5 @@
   "timepicker": {},
   "timezone": "",
   "title": "resize-operator",
-  "uid": "resize-operator",
-  "version": 1
+  "uid": "resize-operator"
 }
