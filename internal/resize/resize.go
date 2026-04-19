@@ -139,26 +139,19 @@ func (p *Prober) Supported(ctx context.Context, ttl time.Duration, now time.Time
 }
 
 func (p *Prober) Mark(cap Capability) {
-	if p == nil {
-		return
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cache = cap
 }
 
-func (p *Prober) UpdateResize(ctx context.Context, pod *corev1.Pod, desired *corev1.Pod, dryRun bool) (*corev1.Pod, error) {
+func (p *Prober) UpdateResize(ctx context.Context, pod *corev1.Pod, desired *corev1.Pod) (*corev1.Pod, error) {
 	if p == nil || p.clientset == nil {
 		return nil, fmt.Errorf("kubernetes clientset is not configured")
 	}
 	if pod == nil || desired == nil {
 		return nil, fmt.Errorf("pod/desired must not be nil")
 	}
-	opts := metav1.UpdateOptions{}
-	if dryRun {
-		opts.DryRun = []string{metav1.DryRunAll}
-	}
-	out, err := p.clientset.CoreV1().Pods(pod.Namespace).UpdateResize(ctx, pod.Name, desired, opts)
+	out, err := p.clientset.CoreV1().Pods(pod.Namespace).UpdateResize(ctx, pod.Name, desired, metav1.UpdateOptions{})
 	if err == nil {
 		return out, nil
 	}
@@ -175,29 +168,40 @@ func isUnsupportedResizeErr(err error) bool {
 	if err == nil {
 		return false
 	}
+
+	// HTTP 405 Method Not Allowed from the API server.
 	if apierrors.IsMethodNotSupported(err) {
 		return true
 	}
+
 	var se *apierrors.StatusError
 	if errors.As(err, &se) {
-		code := se.ErrStatus.Code
-		// A missing Pod is a transient race (pod was deleted/recreated) and must
-		// not flip global capability to Unsupported.
-		if code == 404 && se.ErrStatus.Details != nil &&
-			se.ErrStatus.Details.Kind == "pods" &&
-			se.ErrStatus.Details.Name != "" &&
-			se.ErrStatus.Details.Group == "" {
+		if isPodNotFoundStatus(se) {
 			return false
 		}
-		if code == 404 || code == 405 {
-			return true
-		}
+		code := se.ErrStatus.Code
+		return code == 404 || code == 405
 	}
+
 	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "pods \"") && strings.Contains(msg, "\" not found") {
+	if isPodNotFoundMsg(msg) {
 		return false
 	}
-	return strings.Contains(msg, "pods/resize") && (strings.Contains(msg, "not found") || strings.Contains(msg, "method not allowed"))
+	return strings.Contains(msg, "pods/resize") &&
+		(strings.Contains(msg, "not found") || strings.Contains(msg, "method not allowed"))
+}
+
+func isPodNotFoundStatus(se *apierrors.StatusError) bool {
+	d := se.ErrStatus.Details
+	return se.ErrStatus.Code == 404 &&
+		d != nil &&
+		d.Kind == "pods" &&
+		d.Name != "" &&
+		d.Group == ""
+}
+
+func isPodNotFoundMsg(msg string) bool {
+	return strings.Contains(msg, "pods \"") && strings.Contains(msg, "\" not found")
 }
 
 func hasVerb(verbs []string, verb string) bool {

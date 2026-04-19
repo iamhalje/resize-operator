@@ -73,7 +73,7 @@ type QoSChangeError struct {
 }
 
 func (e *QoSChangeError) Error() string {
-	return fmt.Sprintf("pod QoS class many not change (%s -> %s)", e.From, e.To)
+	return fmt.Sprintf("pod QoS class may not change (%s -> %s)", e.From, e.To)
 }
 
 func ComputeDesired(pod *corev1.Pod, pm *metricsv1beta1.PodMetrics, spec resizev1alpha1.InPlacePodResizeSpec) (Result, error) {
@@ -94,12 +94,6 @@ func ComputeDesired(pod *corev1.Pod, pm *metricsv1beta1.PodMetrics, spec resizev
 	}
 	if currentQoS != corev1.PodQOSGuaranteed && limitsMode == resizev1alpha1.LimitsModeEqualRequests {
 		limitsMode = resizev1alpha1.LimitsModeUnchanged
-	}
-	if currentQoS == corev1.PodQOSGuaranteed && limitsMode != resizev1alpha1.LimitsModeEqualRequests {
-		return Result{Desired: pod.DeepCopy(), Hash: hashPodResources(pod), Changed: false}, &QoSChangeError{
-			From: currentQoS,
-			To:   corev1.PodQOSBurstable,
-		}
 	}
 
 	usageByContainer := make(map[string]corev1.ResourceList, len(pm.Containers))
@@ -244,8 +238,13 @@ func hashPodResources(pod *corev1.Pod) string {
 	if pod == nil {
 		return ""
 	}
-	cs := make([]c, 0, len(pod.Spec.Containers))
-	for _, ctr := range pod.Spec.Containers {
+
+	allContainers := make([]corev1.Container, 0, len(pod.Spec.InitContainers)+len(pod.Spec.Containers))
+	allContainers = append(allContainers, pod.Spec.InitContainers...)
+	allContainers = append(allContainers, pod.Spec.Containers...)
+
+	cs := make([]c, 0, len(allContainers))
+	for _, ctr := range allContainers {
 		item := c{Name: ctr.Name}
 		if len(ctr.Resources.Requests) > 0 {
 			item.Req = make(map[string]string, len(ctr.Resources.Requests))
@@ -402,7 +401,6 @@ func applyBounds(rl *corev1.ResourceList, name corev1.ResourceName, minQ, maxQ *
 		(*rl)[name] = maxQ.DeepCopy()
 		hitMax = true
 	}
-
 	return hitMin, hitMax
 }
 
@@ -500,7 +498,7 @@ func forceBurstable(desired *corev1.Pod, spec resizev1alpha1.InPlacePodResizeSpe
 	}
 
 	minCPUMilli := int64(0)
-	if spec.Bounds.MemoryMin != nil {
+	if spec.Bounds.CPUMin != nil {
 		minCPUMilli = spec.Bounds.CPUMin.MilliValue()
 	}
 	minMemBytes := int64(0)
@@ -551,7 +549,6 @@ func computeDeltaRequests(oldPod, newPod *corev1.Pod) Delta {
 	}
 
 	oldByName := make(map[string]corev1.ResourceList, len(oldPod.Spec.Containers))
-
 	for i := range oldPod.Spec.Containers {
 		c := &oldPod.Spec.Containers[i]
 		oldByName[c.Name] = c.Resources.Requests

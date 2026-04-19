@@ -24,23 +24,23 @@ import (
 	_ "time/tzdata"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	// kubebuilder create api
 	resizev1alpha1 "github.com/iamhalje/resize-operator/api/v1alpha1"
 	"github.com/iamhalje/resize-operator/internal/controller"
 	"github.com/iamhalje/resize-operator/internal/metrics"
 	"github.com/iamhalje/resize-operator/internal/resize"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -80,16 +80,16 @@ func main() {
 	var resizeTimeout time.Duration
 	var patchTimeout time.Duration
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&timeZone, "time-zone", "", "Time zone name for annotations (e.g. Asia/Yekaterinburg). Default is UTC.")
-	flag.Float64Var(&kubeAPIQPS, "kube-api-qps", 0, "Kubernetes API client QPS (0 = default).")
-	flag.IntVar(&kubeAPIBurst, "kube-api-burst", 0, "Kubernetes API client burst (0 = default).")
-	flag.DurationVar(&metricsTimeout, "metrics-timeout", 5*time.Second, "Timeout for metrics-server list calls.")
-	flag.DurationVar(&resizeTimeout, "resize-timeout", 10*time.Second, "Timeout for pods/resize dry-run/apply calls.")
-	flag.DurationVar(&patchTimeout, "patch-timeout", 5*time.Second, "Timeout for pod annotation patch calls.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&timeZone, "time-zone", "", "Time zone name for annotations (e.g. Asia/Yekaterinburg). Default is UTC.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.Float64Var(&kubeAPIQPS, "kube-api-qps", 0, "Kubernetes API client QPS.")
+	flag.IntVar(&kubeAPIBurst, "kube-api-burst", 0, "Kubernetes API client burst.")
+	flag.DurationVar(&metricsTimeout, "metrics-timeout", 5*time.Second, "Timeout for metrics-server list calls.")
+	flag.DurationVar(&resizeTimeout, "resize-timeout", 10*time.Second, "Timeout for pods/resize apply calls.")
+	flag.DurationVar(&patchTimeout, "patch-timeout", 5*time.Second, "Timeout for pod annotation patch calls.")
 	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -142,20 +142,14 @@ func main() {
 			loc = l
 		}
 	}
-	setupLog.Info("Time zone for annotations",
-		"timeZone", timeZone,
-		"resolved", loc.String(),
-		"now", time.Now().In(loc).Format(time.RFC3339Nano),
-	)
 
 	// kubebuilder create api
 	if err := (&controller.InPlacePodResizeReconciler{
-		Client:    mgr.GetClient(),
-		APIReader: mgr.GetAPIReader(),
-		Scheme:    mgr.GetScheme(),
-		Metrics:   metrics.New(metricsCS),
-		Resizer:   resize.NewProber(kubeClientset.Discovery(), kubeClientset),
-		//lint:ignore SA1019
+		Client:         mgr.GetClient(),
+		APIReader:      mgr.GetAPIReader(),
+		Scheme:         mgr.GetScheme(),
+		Metrics:        metrics.New(metricsCS),
+		Resizer:        resize.NewProber(kubeClientset.Discovery(), kubeClientset),
 		Recorder:       mgr.GetEventRecorderFor("resize-operator"),
 		TimeLocation:   loc,
 		MetricsTimeout: metricsTimeout,
