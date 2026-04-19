@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sort"
 	"sync"
 	"time"
 
@@ -110,6 +109,14 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	setCond := func(cond metav1.Condition) {
 		meta.SetStatusCondition(&ipr.Status.Conditions, cond)
 	}
+	var requeueAfter time.Duration
+	defer func() {
+		ipr.Status.ObservedGeneration = ipr.Generation
+		ipr.Status.LastRunTime = &metav1.Time{Time: now()}
+		if err := r.Status().Patch(ctx, &ipr, statusPatch); err != nil {
+			log.Error(err, "Patch status failed")
+		}
+	}()
 
 	if !ipr.Spec.Enabled {
 		setCond(metav1.Condition{
@@ -120,9 +127,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			ObservedGeneration: ipr.Generation,
 			LastTransitionTime: metav1.NewTime(now()),
 		})
-		ipr.Status.ObservedGeneration = ipr.Generation
-		ipr.Status.LastRunTime = &metav1.Time{Time: now()}
-		_ = r.Status().Patch(ctx, &ipr, statusPatch)
+		requeueAfter = interval
 		return ctrl.Result{RequeueAfter: interval}, nil
 	}
 
@@ -177,9 +182,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 		log.Info("In-place resize unsupported; skipping evaluation",
 			"state", cap.State, "reason", cap.Reason, "message", cap.Message, "requeueAfter", interval.String())
-		ipr.Status.ObservedGeneration = ipr.Generation
-		ipr.Status.LastRunTime = &metav1.Time{Time: now()}
-		_ = r.Status().Patch(ctx, &ipr, statusPatch)
+		requeueAfter = interval
 		return ctrl.Result{RequeueAfter: interval}, nil
 	}
 
@@ -194,7 +197,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			ObservedGeneration: ipr.Generation,
 			LastTransitionTime: metav1.NewTime(now()),
 		})
-		_ = r.Status().Patch(ctx, &ipr, statusPatch)
+		requeueAfter = interval
 		return ctrl.Result{RequeueAfter: interval}, nil
 	}
 
@@ -207,9 +210,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			ObservedGeneration: ipr.Generation,
 			LastTransitionTime: metav1.NewTime(now()),
 		})
-		ipr.Status.ObservedGeneration = ipr.Generation
-		ipr.Status.LastRunTime = &metav1.Time{Time: now()}
-		_ = r.Status().Patch(ctx, &ipr, statusPatch)
+		requeueAfter = interval
 		return ctrl.Result{RequeueAfter: interval}, nil
 	}
 
@@ -226,21 +227,11 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 				ObservedGeneration: ipr.Generation,
 				LastTransitionTime: metav1.NewTime(now()),
 			})
-			_ = r.Status().Patch(ctx, &ipr, statusPatch)
+			requeueAfter = interval
 			return ctrl.Result{RequeueAfter: interval}, nil
 		}
 		podLabelSel = client.MatchingLabelsSelector{Selector: ls}
 		podLabelSelectorString = ls.String()
-	}
-
-	listPodsClusterWide := len(ipr.Spec.NamespaceSelector.Include) == 0 && ipr.Spec.PodSelector != nil
-
-	var nsList corev1.NamespaceList
-	if !listPodsClusterWide {
-		observability.IncAPICall(ipr.Name, "list_namespaces")
-		if err := r.List(ctx, &nsList); err != nil {
-			return ctrl.Result{}, err
-		}
 	}
 
 	var (
@@ -256,7 +247,6 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		podsNoChange             int
 		podsPendingStabilization int
 		podsBudgetSkipped        int
-		podsDryRunFailed         int
 		podsApplyFailed          int
 		podsResized              int
 		boundedCPUMinTotal       int
@@ -286,12 +276,16 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		maxConcurrentPods = maxPods
 	}
 
+	// This reduces list_pods from O(namespaces) to O(1).
 	candidates := make([]*corev1.Pod, 0, 256)
-
-	if listPodsClusterWide {
+	{
 		var pods corev1.PodList
+		listOpts := []client.ListOption{}
+		if ipr.Spec.PodSelector != nil {
+			listOpts = append(listOpts, podLabelSel)
+		}
 		observability.IncAPICall(ipr.Name, "list_pods_clusterwide")
-		if err := r.List(ctx, &pods, podLabelSel); err != nil {
+		if err := r.List(ctx, &pods, listOpts...); err != nil {
 			log.Error(err, "List pods failed (cluster-wide)")
 			stopAll = true
 		} else {
@@ -302,6 +296,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			if !selector.Match(pod.Namespace) {
 				continue
 			}
+			namespacesMatched++ // count distinct matched namespaces below
 			if !isEligiblePod(pod) {
 				continue
 			}
@@ -312,42 +307,18 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			}
 			candidates = append(candidates, pod)
 		}
-	} else {
-		names := make([]string, 0, len(nsList.Items))
-		for i := range nsList.Items {
-			names = append(names, nsList.Items[i].Name)
-		}
-		sort.Strings(names)
 
-		for _, ns := range names {
-			if !selector.Match(ns) {
-				continue
-			}
-			namespacesMatched++
-
-			var pods corev1.PodList
-			opts := []client.ListOption{client.InNamespace(ns)}
-			if ipr.Spec.PodSelector != nil {
-				opts = append(opts, podLabelSel)
-			}
-			observability.IncAPICall(ipr.Name, "list_pods")
-			if err := r.List(ctx, &pods, opts...); err != nil {
-				log.Error(err, "List pods failed", "namespace", ns)
-				continue
-			}
-			podsListed += len(pods.Items)
-
+		if !stopAll {
+			seen := make(map[string]struct{}, 16)
+			namespacesMatched = 0
 			for i := range pods.Items {
-				pod := &pods.Items[i]
-				if !isEligiblePod(pod) {
-					continue
+				ns := pods.Items[i].Namespace
+				if selector.Match(ns) {
+					if _, ok := seen[ns]; !ok {
+						seen[ns] = struct{}{}
+						namespacesMatched++
+					}
 				}
-				podsEligible++
-				if shouldSkipByCooldown(pod, cooldown, now()) {
-					podsSkippedCooldown++
-					continue
-				}
-				candidates = append(candidates, pod)
 			}
 		}
 	}
@@ -375,7 +346,6 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 		b.mu.Lock()
 		defer b.mu.Unlock()
-
 		nextCPU := b.committed.CPURequestMilli + b.reserved.CPURequestMilli + add.CPURequestMilli
 		nextMem := b.committed.MemoryRequestByte + b.reserved.MemoryRequestByte + add.MemoryRequestByte
 		if b.maxCPUm > 0 && nextCPU > b.maxCPUm {
@@ -429,49 +399,35 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	var mu sync.Mutex
 	fatalOnce := sync.Once{}
 
-	type nsMetrics struct {
-		once   sync.Once
-		byPod  map[string]*metricsv1beta1.PodMetrics
-		err    error
-		listed bool
-	}
-	var nsMu sync.Mutex
-	nsCache := make(map[string]*nsMetrics)
-	getNS := func(namespace string) *nsMetrics {
-		nsMu.Lock()
-		defer nsMu.Unlock()
-		e := nsCache[namespace]
-		if e == nil {
-			e = &nsMetrics{}
-			nsCache[namespace] = e
-		}
-		return e
-	}
-	getPodMetrics := func(namespace, podName string) (*metricsv1beta1.PodMetrics, error) {
-		e := getNS(namespace)
-		e.once.Do(func() {
-			observability.IncAPICall(ipr.Name, "list_pod_metrics")
-			ctx, cancel := context.WithTimeout(runCtx, metricsTimeout)
-			defer cancel()
-			list, err := r.Metrics.ListPodMetrics(ctx, namespace, podLabelSelectorString)
-			if err != nil {
-				e.err = err
-				return
-			}
-			e.listed = true
-			e.byPod = make(map[string]*metricsv1beta1.PodMetrics, len(list.Items))
+	type podKey struct{ namespace, name string }
+	allMetrics := make(map[podKey]*metricsv1beta1.PodMetrics)
+	var metricsErr error
+	var metricsListed bool
+
+	if !stopAll && len(candidates) > 0 {
+		observability.IncAPICall(ipr.Name, "list_pod_metrics_clusterwide")
+		mctx, mcancel := context.WithTimeout(runCtx, metricsTimeout)
+		list, err := r.Metrics.ListPodMetrics(mctx, "", podLabelSelectorString)
+		mcancel()
+		if err != nil {
+			metricsErr = err
+		} else {
+			metricsListed = true
 			for i := range list.Items {
 				pm := list.Items[i].DeepCopy()
-				e.byPod[pm.Name] = pm
+				allMetrics[podKey{pm.Namespace, pm.Name}] = pm
 			}
-		})
-		if e.err != nil {
-			return nil, e.err
 		}
-		if e.byPod == nil {
+	}
+
+	getPodMetrics := func(namespace, podName string) (*metricsv1beta1.PodMetrics, error) {
+		if metricsErr != nil {
+			return nil, metricsErr
+		}
+		if !metricsListed {
 			return nil, nil
 		}
-		return e.byPod[podName], nil
+		return allMetrics[podKey{namespace, podName}], nil
 	}
 
 	getFreshPod := func(namespace, name string) (*corev1.Pod, error) {
@@ -581,11 +537,11 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		desiredHash := res.Hash
 		t := now()
 		if !stabilizationAllows(pod, desiredHash, stab, t) {
-			ctx, cancel := context.WithTimeout(runCtx, patchTimeout)
-			if err := r.ensurePending(ctx, pod, desiredHash, t); err != nil {
+			pctx, pcancel := context.WithTimeout(runCtx, patchTimeout)
+			if err := r.ensurePending(pctx, pod, desiredHash, t); err != nil {
 				log.Error(err, "Patch pending annotations failed", "pod", pod.Name, "namespace", pod.Namespace)
 			}
-			cancel()
+			pcancel()
 			mu.Lock()
 			podsPendingStabilization++
 			mu.Unlock()
@@ -612,83 +568,20 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return
 		}
 
-		observability.IncAPICall(ipr.Name, "update_resize_dryrun")
-		{
-			ctx, cancel := context.WithTimeout(runCtx, resizeTimeout)
-			_, err := r.Resizer.UpdateResize(ctx, pod, res.Desired, true)
-			cancel()
-			if err != nil {
-				if apierrors.IsConflict(err) {
-					if fresh, gerr := getFreshPod(pod.Namespace, pod.Name); gerr == nil && fresh != nil {
-						desired2 := res.Desired.DeepCopy()
-						desired2.ResourceVersion = fresh.ResourceVersion
-						desired2.UID = fresh.UID
-						ctx2, cancel2 := context.WithTimeout(runCtx, resizeTimeout)
-						_, err2 := r.Resizer.UpdateResize(ctx2, fresh, desired2, true)
-						cancel2()
-						if err2 == nil {
-							res.Desired = desired2
-							goto dryrunOK
-						}
-					}
-					mu.Lock()
-					podsConflictSkipped++
-					mu.Unlock()
-					log.V(1).Info("Dry-run resize conflict; will retry next reconcile", "pod", pod.Name, "namespace", pod.Namespace)
-					return
-				}
-				mu.Lock()
-				podsDryRunFailed++
-				mu.Unlock()
-				log.Error(err, "Dry-run resize failed", "pod", pod.Name, "namespace", pod.Namespace)
-
-				var u *resize.UnsupportedError
-				var f *resize.ForbiddenError
-				if errors.As(err, &u) || errors.As(err, &f) {
-					fatalOnce.Do(func() {
-						c := resize.Capability{
-							State:   resize.SupportUnsupported,
-							Reason:  "RuntimeProbeFailed",
-							Message: err.Error(),
-							Checked: now(),
-						}
-						if r.Resizer != nil {
-							r.Resizer.Mark(c)
-						}
-						observability.ObserveCapability(ipr.Name, string(c.State))
-						observability.IncCapabilityRuntimeProbeFailure(ipr.Name, "dryrun")
-						ipr.Status.LastCapabilityCheckTime = &metav1.Time{Time: c.Checked}
-						setCond(metav1.Condition{
-							Type:               conditionInPlaceResizeSupport,
-							Status:             metav1.ConditionFalse,
-							Reason:             "RuntimeProbeFailed",
-							Message:            err.Error(),
-							ObservedGeneration: ipr.Generation,
-							LastTransitionTime: metav1.NewTime(now()),
-						})
-						stopAll = true
-						cancel()
-					})
-				}
-				return
-			}
-		}
-	dryrunOK:
-
 		observability.IncAPICall(ipr.Name, "update_resize_apply")
 		{
-			ctx, cancel := context.WithTimeout(runCtx, resizeTimeout)
-			_, err := r.Resizer.UpdateResize(ctx, pod, res.Desired, false)
-			cancel()
+			actx, acancel := context.WithTimeout(runCtx, resizeTimeout)
+			_, err := r.Resizer.UpdateResize(actx, pod, res.Desired)
+			acancel()
 			if err != nil {
 				if apierrors.IsConflict(err) {
 					if fresh, gerr := getFreshPod(pod.Namespace, pod.Name); gerr == nil && fresh != nil {
 						desired2 := res.Desired.DeepCopy()
 						desired2.ResourceVersion = fresh.ResourceVersion
 						desired2.UID = fresh.UID
-						ctx2, cancel2 := context.WithTimeout(runCtx, resizeTimeout)
-						_, err2 := r.Resizer.UpdateResize(ctx2, fresh, desired2, false)
-						cancel2()
+						actx2, acancel2 := context.WithTimeout(runCtx, resizeTimeout)
+						_, err2 := r.Resizer.UpdateResize(actx2, fresh, desired2)
+						acancel2()
 						if err2 == nil {
 							res.Desired = desired2
 							goto applyOK
@@ -719,7 +612,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 							r.Resizer.Mark(c)
 						}
 						observability.ObserveCapability(ipr.Name, string(c.State))
-						observability.IncCapabilityRuntimeProbeFailure(ipr.Name, "dryrun")
+						observability.IncCapabilityRuntimeProbeFailure(ipr.Name, "apply")
 						ipr.Status.LastCapabilityCheckTime = &metav1.Time{Time: c.Checked}
 						setCond(metav1.Condition{
 							Type:               conditionInPlaceResizeSupport,
@@ -755,8 +648,8 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		mu.Unlock()
 
 		observability.IncAPICall(ipr.Name, "patch_pod_annotations")
-		ctx, cancel := context.WithTimeout(runCtx, patchTimeout)
-		if err := r.patchPodAnnotations(ctx, pod, map[string]string{
+		pctx, pcancel := context.WithTimeout(runCtx, patchTimeout)
+		if err := r.patchPodAnnotations(pctx, pod, map[string]string{
 			annotationLastResizeTime:  formatTime(t),
 			annotationLastAppliedHash: desiredHash,
 			annotationPendingHash:     "",
@@ -764,7 +657,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}); err != nil {
 			log.Error(err, "Patch resize annotations failed", "pod", pod.Name, "namespace", pod.Namespace)
 		}
-		cancel()
+		pcancel()
 		if r.Recorder != nil {
 			deltaCPU := resource.NewMilliQuantity(res.Delta.CPURequestMilli, resource.DecimalSI).String()
 			deltaMem := resource.NewQuantity(res.Delta.MemoryRequestByte, resource.BinarySI).String()
@@ -803,7 +696,7 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	totalDelta = committedDelta(bm)
 
 	elapsed := now().Sub(started)
-	requeueAfter := interval
+	requeueAfter = interval
 	if interval > 0 && elapsed > 0 {
 		if elapsed >= interval {
 			requeueAfter = 0
@@ -825,7 +718,6 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		"podsBudgetSkipped", podsBudgetSkipped,
 		"podsMetricsNotFound", podsMetricsNotFound,
 		"podsMetricsErrorsOther", podsMetricsErrorsOther,
-		"podsDryRunFailed", podsDryRunFailed,
 		"podsApplyFailed", podsApplyFailed,
 		"podsResized", podsResized,
 		"boundedCPU.min", boundedCPUMinTotal,
@@ -849,7 +741,6 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		PodsQoSSkipped:           podsQoSSkipped,
 		PodsConflictSkipped:      podsConflictSkipped,
 		PodsNoChange:             podsNoChange,
-		PodsDryRunFailed:         podsDryRunFailed,
 		PodsApplyFailed:          podsApplyFailed,
 		PodsResized:              podsResized,
 		MetricsOK:                metricsOK,
@@ -898,13 +789,6 @@ func (r *InPlacePodResizeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		})
 	}
 
-	ipr.Status.ObservedGeneration = ipr.Generation
-	ipr.Status.LastRunTime = &metav1.Time{Time: now()}
-	if err := r.Status().Patch(ctx, &ipr, statusPatch); err != nil {
-		log.Error(err, "Patch status failed")
-		return ctrl.Result{RequeueAfter: requeueAfter}, nil
-	}
-
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
@@ -928,7 +812,10 @@ func isEligiblePod(pod *corev1.Pod) bool {
 	default:
 		return false
 	}
-	return pod.Spec.NodeName != ""
+	if pod.Spec.NodeName == "" {
+		return false
+	}
+	return true
 }
 
 func shouldSkipByCooldown(pod *corev1.Pod, cooldown time.Duration, now time.Time) bool {

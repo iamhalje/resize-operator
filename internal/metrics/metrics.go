@@ -30,20 +30,11 @@ type Client struct {
 }
 
 func New(cs metricsclientset.Interface) *Client {
-	return &Client{
-		cs: cs,
-	}
-}
-
-func (c *Client) GetPodMetrics(ctx context.Context, namespace, name string) (*metricsv1beta1.PodMetrics, error) {
-	if c == nil || c.cs == nil {
-		return nil, fmt.Errorf("metrics client is not configured")
-	}
-	return c.cs.MetricsV1beta1().PodMetricses(namespace).Get(ctx, name, metav1.GetOptions{})
+	return &Client{cs: cs}
 }
 
 func (c *Client) ListPodMetrics(ctx context.Context, namespace, labelSelector string) (*metricsv1beta1.PodMetricsList, error) {
-	if c == nil || c.cs == nil {
+	if c.cs == nil {
 		return nil, fmt.Errorf("metrics client is not configured")
 	}
 	return c.cs.MetricsV1beta1().PodMetricses(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})

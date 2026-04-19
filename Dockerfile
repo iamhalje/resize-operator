@@ -31,7 +31,7 @@ ENV GOCACHE=/root/.cache/go-build
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -a -trimpath -o manager ${ROOT}
+    go build -trimpath -o manager ${ROOT}
 
 # Use scratch as minimal base image to package the manager binary
 FROM ${BASEIMAGE}

@@ -141,13 +141,6 @@ var (
 		},
 		[]string{"policy", "resource", "bound"},
 	)
-	requestsBoundedByNamespaceTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "resize_operator_requests_bounded_namespace_total",
-			Help: "Total number of times desired request was clamped to configured bounds, by namespace.",
-		},
-		[]string{"policy", "namespace", "resource", "bound"},
-	)
 	lastRunDeltaCPURequestMilliByNamespace = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "resize_operator_last_run_delta_cpu_request_millicores_namespace",
@@ -200,7 +193,7 @@ var (
 	capabilityRuntimeProbeFailuresTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "resize_operator_capability_runtime_probe_failures_total",
-			Help: "Total runtime capability probe failures that forced capability downgrade.",
+			Help: "Total number of in-place resize capability probe failures, by phase.",
 		},
 		[]string{"policy", "phase"},
 	)
@@ -220,7 +213,6 @@ func init() {
 		apiCallsTotal,
 		requestsClampedTotal,
 		requestsBoundedTotal,
-		requestsBoundedByNamespaceTotal,
 		podsResizedByNamespaceTotal,
 		lastRunDeltaCPURequestMilliByNamespace,
 		lastRunDeltaMemoryRequestBytesByNamespace,
@@ -265,8 +257,6 @@ func InitPolicyMetrics(policy string) {
 
 	for _, res := range []string{"cpu", "memory"} {
 		requestsClampedTotal.WithLabelValues(policy, res)
-		requestsBoundedTotal.WithLabelValues(policy, res, "min")
-		requestsBoundedTotal.WithLabelValues(policy, res, "max")
 	}
 
 	for _, dir := range []string{"up", "down"} {
@@ -274,12 +264,14 @@ func InitPolicyMetrics(policy string) {
 		deltaMemoryRequestBytesTotal.WithLabelValues(policy, dir)
 	}
 
+	for _, phase := range []string{"dryrun", "apply"} {
+		capabilityRuntimeProbeFailuresTotal.WithLabelValues(policy, phase)
+	}
+
 	for _, state := range capabilityStates {
 		capabilityState.WithLabelValues(policy, state)
 	}
 	capabilityState.WithLabelValues(policy, "unknown").Set(1)
-	capabilityRuntimeProbeFailuresTotal.WithLabelValues(policy, "dryrun")
-	capabilityRuntimeProbeFailuresTotal.WithLabelValues(policy, "apply")
 }
 
 func ObserveRun(policy string, started time.Time, s RunStats) {
@@ -289,14 +281,15 @@ func ObserveRun(policy string, started time.Time, s RunStats) {
 	reconcileTotal.WithLabelValues(policy).Inc()
 	reconcileDuration.WithLabelValues(policy).Observe(time.Since(started).Seconds())
 	lastRunTimestamp.WithLabelValues(policy).Set(float64(time.Now().Unix()))
-	if s.PodsMetricsErrorsOther > 0 {
-		lastRunMetricsOK.WithLabelValues(policy).Set(0)
-	} else {
+
+	if s.MetricsOK {
 		lastRunMetricsOK.WithLabelValues(policy).Set(1)
+	} else {
+		lastRunMetricsOK.WithLabelValues(policy).Set(0)
 	}
+
 	lastRunDeltaCPURequestMilli.WithLabelValues(policy).Set(float64(s.DeltaCPURequestMilli))
 	lastRunDeltaMemoryRequestBytes.WithLabelValues(policy).Set(float64(s.DeltaMemoryRequestByte))
-	AddDeltaTotals(policy, s.DeltaCPURequestMilli, s.DeltaMemoryRequestByte)
 
 	if s.PodsResized > 0 {
 		podsResizedTotal.WithLabelValues(policy).Add(float64(s.PodsResized))
@@ -360,6 +353,11 @@ func AddClamped(policy, resource string, n int) {
 	requestsClampedTotal.WithLabelValues(policy, resource).Add(float64(n))
 }
 
+func ResetNamespaceGauges() {
+	lastRunDeltaCPURequestMilliByNamespace.Reset()
+	lastRunDeltaMemoryRequestBytesByNamespace.Reset()
+}
+
 func ObserveNamespace(policy, namespace string, resized int, deltaCPUMilli, deltaMemBytes int64) {
 	if policy == "" {
 		policy = "unknown"
@@ -400,13 +398,17 @@ func AddDeltaTotalsNamespace(policy, namespace string, deltaCPUMilli, deltaMemBy
 	}
 	if deltaCPUMilli > 0 {
 		deltaCPURequestMilliByNamespaceTotal.WithLabelValues(policy, namespace, "up").Add(float64(deltaCPUMilli))
+		deltaCPURequestMilliTotal.WithLabelValues(policy, "up").Add(float64(deltaCPUMilli))
 	} else if deltaCPUMilli < 0 {
 		deltaCPURequestMilliByNamespaceTotal.WithLabelValues(policy, namespace, "down").Add(float64(-deltaCPUMilli))
+		deltaCPURequestMilliTotal.WithLabelValues(policy, "down").Add(float64(-deltaCPUMilli))
 	}
 	if deltaMemBytes > 0 {
 		deltaMemoryRequestBytesByNamespaceTotal.WithLabelValues(policy, namespace, "up").Add(float64(deltaMemBytes))
+		deltaMemoryRequestBytesTotal.WithLabelValues(policy, "up").Add(float64(deltaMemBytes))
 	} else if deltaMemBytes < 0 {
 		deltaMemoryRequestBytesByNamespaceTotal.WithLabelValues(policy, namespace, "down").Add(float64(-deltaMemBytes))
+		deltaMemoryRequestBytesTotal.WithLabelValues(policy, "down").Add(float64(-deltaMemBytes))
 	}
 }
 
@@ -427,22 +429,10 @@ func AddBounded(policy, resource, bound string, n int) {
 }
 
 func AddBoundedNamespace(policy, namespace, resource, bound string, n int) {
-	if n <= 0 {
-		return
-	}
-	if policy == "" {
-		policy = "unknown"
-	}
 	if namespace == "" {
 		namespace = "unknown"
 	}
-	if resource == "" {
-		resource = "unknown"
-	}
-	if bound == "" {
-		bound = "unknown"
-	}
-	requestsBoundedByNamespaceTotal.WithLabelValues(policy, namespace, resource, bound).Add(float64(n))
+	AddBounded(policy, resource, bound, n)
 }
 
 func ObserveCapability(policy, state string) {
