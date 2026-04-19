@@ -600,8 +600,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resize_operator_requests_bounded_namespace_total{policy=~\"$policy\",namespace=~\"$namespace\"}[5m])) by (namespace, bound)",
-          "legendFormat": "{{namespace}} - {{ bound }}",
+          "expr": "sum(rate(resize_operator_requests_bounded_total{policy=~\"$policy\"}[5m])) by (policy, bound)",
+          "legendFormat": "{{policy}} - {{ bound }}",
           "range": true,
           "refId": "A"
         }
